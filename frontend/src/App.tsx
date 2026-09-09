@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import Boot from "./components/Boot";
 import { api, getToken, setToken, type DatasetMeta } from "./api/client";
 import { nowStamp } from "./lib/format";
+import AutoAnalysis from "./modules/auto/AutoAnalysis";
+import Guided from "./modules/guided/Guided";
 import Repository from "./modules/repository/Repository";
 import Visualize from "./modules/visualize/Visualize";
 import Preprocess from "./modules/preprocess/Preprocess";
@@ -13,12 +15,17 @@ import BCI from "./modules/bci/BCI";
 import Editor from "./modules/editor/Editor";
 import Report from "./modules/report/Report";
 import CodeLab from "./modules/lab/CodeLab";
+import Cohort from "./modules/cohort/Cohort";
 import { MODULE_INFO } from "./modules/placeholder/ModulePlaceholder";
 import SceneDecor from "./components/SceneDecor";
+import ErrorBoundary from "./components/ErrorBoundary";
+import SetupCheck from "./components/SetupCheck";
+import CommandPalette, { useCommandPalette, type Command } from "./components/CommandPalette";
 
 interface ModDef { id: string; idx: string; label: string; gly: string; live: boolean }
 
 const MODULES: ModDef[] = [
+  { id: "auto", idx: "00", label: "Auto", gly: "◉", live: true },
   { id: "repository", idx: "01", label: "Repo", gly: "▤", live: true },
   { id: "visualize", idx: "02", label: "View", gly: "∿", live: true },
   { id: "preprocess", idx: "03", label: "Prep", gly: "⚙", live: true },
@@ -30,15 +37,56 @@ const MODULES: ModDef[] = [
   { id: "editor", idx: "09", label: "Editor", gly: "✎", live: true },
   { id: "report", idx: "10", label: "Report", gly: "▣", live: true },
   { id: "lab", idx: "11", label: "Lab", gly: "⌨", live: true },
+  { id: "cohort", idx: "12", label: "Cohort", gly: "⦿", live: true },
 ];
+
+// How people actually describe each module when they search for it, rather than the
+// name we happened to give it.
+const MODULE_KEYWORDS: Record<string, string> = {
+  auto: "analyze report health findings summary what is this",
+  repository: "import upload load open files bids browse datasets",
+  visualize: "signal traces viewer waveform browse raw scroll",
+  preprocess: "filter notch ica clean artifact reference resample bad channels",
+  erp: "p300 n170 mmn evoked average epochs latency cluster peak",
+  analyze: "psd spectrum bandpower fooof aperiodic microstates connectivity coherence features",
+  mapper: "cohort group compare subjects reliability matrix",
+  bench: "benchmark pipeline compare quality snr",
+  bci: "decode classify csp lda accuracy motor imagery kappa itr",
+  editor: "channels crop montage annotate rename drop virtual",
+  report: "export html pdf fif csv provenance reproduce script hash",
+  lab: "python code script custom notebook run",
+  cohort: "batch group study all subjects table csv outliers many",
+};
+
+// Guided is the default face; the choice sticks so returning users land where they left.
+const MODE_KEY = "nf_mode";
+type Mode = "guided" | "pro";
 
 export default function App() {
   const [booted, setBooted] = useState(false);
-  const [active, setActive] = useState("repository");
+  const [active, setActive] = useState("auto");
+  const [mode, setMode] = useState<Mode>(
+    () => (localStorage.getItem(MODE_KEY) === "pro" ? "pro" : "guided"));
   const [datasets, setDatasets] = useState<DatasetMeta[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [clock, setClock] = useState(nowStamp());
   const [hasKey, setHasKey] = useState(getToken().length > 0);
+
+  const palette = useCommandPalette();
+
+  const switchMode = (m: Mode) => { setMode(m); localStorage.setItem(MODE_KEY, m); };
+  const openInPro = (moduleId: string) => { setActive(moduleId); switchMode("pro"); };
+
+  const commands: Command[] = [
+    { id: "mode:guided", group: "Mode", title: "Guided mode", hint: "five steps, answers first",
+      keywords: "wizard simple beginner steps", run: () => switchMode("guided") },
+    { id: "mode:pro", group: "Mode", title: "Pro mode", hint: "all 12 modules",
+      keywords: "advanced hud expert modules", run: () => switchMode("pro") },
+    ...MODULES.map((m) => ({
+      id: `mod:${m.id}`, group: "Module", title: MODULE_INFO[m.id]?.name ?? m.label,
+      hint: m.idx, keywords: MODULE_KEYWORDS[m.id] ?? "", run: () => openInPro(m.id),
+    })),
+  ];
 
   const setKey = () => {
     const t = window.prompt("API bearer token (blank to clear):", getToken());
@@ -67,11 +115,29 @@ export default function App() {
 
   return (
     <div className="app">
+      {palette.open && (
+        <CommandPalette
+          commands={commands}
+          datasets={datasets}
+          onSelectDataset={setSelectedId}
+          onClose={() => palette.setOpen(false)}
+        />
+      )}
+
       {/* ---- top bar ---- */}
       <header className="topbar">
         <div className="brand">
           <span className="mark">Neuroforge<sup>²</sup></span>
           <span className="sub">// desktop imperium</span>
+        </div>
+
+        <div className="mode-toggle row" style={{ marginLeft: 14 }}>
+          {(["guided", "pro"] as Mode[]).map((m) => (
+            <button key={m} className={`mode-btn ${mode === m ? "on" : ""}`} onClick={() => switchMode(m)}
+              title={m === "guided" ? "five steps, answers first" : "all 12 modules, full control"}>
+              {m}
+            </button>
+          ))}
         </div>
 
         <div className="row" style={{ marginLeft: 12, gap: 8 }}>
@@ -95,7 +161,7 @@ export default function App() {
             <span className={`dot ${api.online ? "on" : "off"}`} />
             {api.source}
           </span>
-          <span className="led"><span className="dot rec" />rec</span>
+          <SetupCheck />
           <button className="led" onClick={setKey} title="set bearer token (for auth-enabled servers)"
             style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", letterSpacing: "inherit", textTransform: "uppercase" }}>
             <span className="dot" style={{ background: hasKey ? "var(--gold)" : "var(--txt-dim)", boxShadow: hasKey ? "0 0 8px var(--gold)" : "none" }} />
@@ -106,7 +172,8 @@ export default function App() {
       </header>
 
       {/* ---- body: rail + content ---- */}
-      <div className="app-body">
+      <div className={`app-body ${mode === "guided" ? "no-rail" : ""}`}>
+        {mode === "pro" && (
         <nav className="rail">
           {MODULES.map((m) => (
             <button
@@ -120,11 +187,29 @@ export default function App() {
             </button>
           ))}
           <div className="rail-spacer" />
-          <div className="rail-meta">v0.1<br />MVP</div>
+          <div className="rail-meta">v0.2<br />HUD</div>
         </nav>
+        )}
 
         <main className="content">
           <SceneDecor />
+          {/* keyed on the module so switching away from a crashed one clears it */}
+          <ErrorBoundary key={mode === "guided" ? "guided" : active}
+            label={mode === "guided" ? "Guided mode" : (MODULE_INFO[active]?.name ?? activeMod.label)}>
+          {mode === "guided" && (
+            <Guided
+              datasets={datasets}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onChanged={refresh}
+              onNavigate={openInPro}
+              onExit={() => switchMode("pro")}
+            />
+          )}
+          {mode === "pro" && <>
+          {active === "auto" && (
+            <AutoAnalysis dataset={selected} onChanged={refresh} onNavigate={setActive} />
+          )}
           {active === "repository" && (
             <Repository
               datasets={datasets}
@@ -144,13 +229,27 @@ export default function App() {
           {active === "editor" && <Editor dataset={selected} onChanged={refresh} />}
           {active === "report" && <Report dataset={selected} onChanged={refresh} />}
           {active === "lab" && <CodeLab dataset={selected} onChanged={refresh} />}
+          {active === "cohort" && (
+            <Cohort
+              datasets={datasets}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onChanged={refresh}
+              onNavigate={setActive}
+            />
+          )}
+          </>}
+          </ErrorBoundary>
         </main>
       </div>
 
       {/* ---- status bar ---- */}
       <footer className="statusbar">
         <div className="status-cell amber">
-          <span>module</span><span className="v">{activeMod.idx} · {MODULE_INFO[active]?.name ?? activeMod.label}</span>
+          <span>mode</span>
+          <span className="v">
+            {mode === "guided" ? "guided · 5 steps" : `${activeMod.idx} · ${MODULE_INFO[active]?.name ?? activeMod.label}`}
+          </span>
         </div>
         <div className="status-cell">
           <span>source</span><span className="v">{api.source}</span>
@@ -164,7 +263,7 @@ export default function App() {
           </>
         )}
         <div className="status-cell grow">
-          <span>NEUROFORGE // {datasets.length} datasets indexed · BIDS-native engine ready</span>
+          <span>NEUROFORGE // {datasets.length} datasets indexed · press ctrl+K to jump anywhere</span>
         </div>
       </footer>
     </div>

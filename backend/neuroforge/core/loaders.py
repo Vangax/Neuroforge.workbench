@@ -12,8 +12,97 @@ from .neurodata import NeuroData, BidsEntities
 from . import synthetic
 
 
-# ext -> (label, mne reader callable | None). None == declared but not yet wired.
+def read_xdf(path: str) -> mne.io.RawArray:
+    """Read a Lab Streaming Layer .xdf recording.
+
+    XDF holds several parallel streams; we take the best continuous signal stream
+    as the data and fold every marker stream into annotations, aligned on the LSL
+    clock. Requires `pyxdf`.
+    """
+    try:
+        import pyxdf
+    except ModuleNotFoundError:
+        raise NotImplementedError(
+            "XDF support needs the 'pyxdf' package — install it with: pip install pyxdf")
+
+    streams, _header = pyxdf.load_xdf(path, dejitter_timestamps=True)
+    if not streams:
+        raise ValueError("no streams found in this XDF file")
+
+    def info_of(s, key, default=""):
+        try:
+            return s["info"][key][0]
+        except Exception:
+            return default
+
+    def is_signal(s) -> bool:
+        try:
+            return np.asarray(s["time_series"]).ndim == 2 and \
+                not isinstance(s["time_series"][0][0], str)
+        except Exception:
+            return False
+
+    signals = [s for s in streams if is_signal(s)]
+    if not signals:
+        raise ValueError("no numeric signal stream in this XDF file")
+    # prefer a stream that calls itself EEG, else the widest one
+    signals.sort(key=lambda s: (info_of(s, "type").upper() != "EEG",
+                                -int(np.asarray(s["time_series"]).shape[1])))
+    sig = signals[0]
+
+    data = np.asarray(sig["time_series"], dtype=float).T          # (n_ch, n_times)
+    stamps = np.asarray(sig["time_stamps"], dtype=float)
+    sfreq = float(info_of(sig, "nominal_srate", 0) or 0)
+    if sfreq <= 0:                                                 # derive from timestamps
+        if stamps.size < 2:
+            raise ValueError("stream has no usable sampling rate")
+        sfreq = float(1.0 / np.median(np.diff(stamps)))
+
+    # channel labels + units from the stream description
+    labels, units = [], []
+    try:
+        chans = sig["info"]["desc"][0]["channels"][0]["channel"]
+        for i, ch in enumerate(chans):
+            labels.append(str(ch.get("label", [f"ch{i + 1}"])[0]))
+            units.append(str(ch.get("unit", ["microvolts"])[0]).lower())
+    except Exception:
+        labels, units = [], []
+    if len(labels) != data.shape[0]:
+        labels = [f"ch{i + 1}" for i in range(data.shape[0])]
+        units = ["microvolts"] * data.shape[0]
+
+    # XDF EEG is conventionally in microvolts; MNE wants volts
+    scale = 1e-6 if not units or any("micro" in u or u in ("uv", "µv") for u in units) else 1.0
+    raw = mne.io.RawArray(data * scale,
+                          mne.create_info(labels, sfreq, ch_types="eeg"), verbose="ERROR")
+
+    # marker streams -> annotations, relative to the signal stream start
+    t0 = stamps[0] if stamps.size else 0.0
+    onsets, descs = [], []
+    for s in streams:
+        if s is sig or is_signal(s):
+            continue
+        ts = np.asarray(s.get("time_stamps", []), dtype=float)
+        for stamp, val in zip(ts, s.get("time_series", [])):
+            try:
+                text = val[0] if isinstance(val, (list, tuple, np.ndarray)) else val
+            except Exception:
+                text = "marker"
+            rel = float(stamp - t0)
+            if 0 <= rel <= raw.n_times / sfreq:
+                onsets.append(rel)
+                descs.append(str(text))
+    if onsets:
+        order = np.argsort(onsets)
+        raw.set_annotations(mne.Annotations(
+            onset=np.asarray(onsets)[order], duration=np.zeros(len(onsets)),
+            description=[descs[i] for i in order]))
+    return raw
+
+
+# ext -> (label, reader callable | None). None == declared but not yet wired.
 _REGISTRY: dict[str, tuple[str, object]] = {
+    ".xdf": ("Lab Streaming Layer (XDF)", read_xdf),
     ".edf": ("European Data Format", lambda p: mne.io.read_raw_edf(p, preload=True, verbose="ERROR")),
     ".bdf": ("BioSemi Data Format", lambda p: mne.io.read_raw_bdf(p, preload=True, verbose="ERROR")),
     ".gdf": ("General Data Format", lambda p: mne.io.read_raw_gdf(p, preload=True, verbose="ERROR")),
@@ -97,14 +186,14 @@ def auto_detect_channels(raw: mne.io.BaseRaw) -> dict:
             demoted.append(ch)
 
     confident = len(eeg) >= 4
+    retypes: dict[str, str] = {}
     if confident:
         if rename:
             raw.rename_channels(rename)
         if demoted:
-            raw.set_channel_types(
-                {ch: ("stim" if any(h in ch.lower() for h in _STIM_HINTS) else "misc") for ch in demoted},
-                verbose="ERROR",
-            )
+            retypes = {ch: ("stim" if any(h in ch.lower() for h in _STIM_HINTS) else "misc")
+                       for ch in demoted}
+            raw.set_channel_types(retypes, verbose="ERROR")
         try:
             raw.set_montage("standard_1005", on_missing="ignore", match_case=False, verbose="ERROR")
         except Exception:
@@ -116,6 +205,11 @@ def auto_detect_channels(raw: mne.io.BaseRaw) -> dict:
         "n_demoted": len(demoted) if confident else 0,
         "auto_detected": confident,
         "eeg_channels": eeg if confident else [],
+        # Kept so the reproduction script can replay the exact same decision
+        # instead of quietly analysing 114 "EEG" channels that are really states.
+        "rename": rename if confident else {},
+        "retypes": retypes,
+        "montage": "standard_1005" if confident else None,
     }
 
 

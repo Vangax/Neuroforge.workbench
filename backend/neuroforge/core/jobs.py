@@ -3,6 +3,7 @@
 # NumPy/MNE. For multi-node, swap this for Celery/RQ behind the same interface.
 from __future__ import annotations
 
+import inspect
 import time
 import uuid
 import logging
@@ -24,16 +25,30 @@ class Job:
     created: float = field(default_factory=time.time)
     started: float | None = None
     finished: float | None = None
+    # Progress for jobs that know how far along they are. A cohort run over forty
+    # recordings takes minutes; without this the UI cannot tell working from stuck.
+    done_n: int = 0
+    total_n: int = 0
+    step: str = ""
 
     def elapsed(self) -> float:
         if self.started is None:
             return 0.0
         return (self.finished or time.time()) - self.started
 
+    def eta(self) -> float | None:
+        """Seconds remaining, from the rate actually achieved so far."""
+        if self.status != "running" or self.done_n <= 0 or self.total_n <= 0:
+            return None
+        per = self.elapsed() / self.done_n
+        return round(per * max(0, self.total_n - self.done_n), 1)
+
     def public(self, with_result: bool = False) -> dict:
         d = {
             "id": self.id, "kind": self.kind, "status": self.status,
             "error": self.error, "elapsed": round(self.elapsed(), 2), "created": self.created,
+            "done_n": self.done_n, "total_n": self.total_n, "step": self.step,
+            "eta": self.eta(),
         }
         if with_result and self.status == "done":
             d["result"] = self.result
@@ -55,10 +70,23 @@ class JobManager:
         self._ex.submit(self._run, job, fn)
         return job
 
-    def _run(self, job: Job, fn: Callable[[], Any]) -> None:
+    def _run(self, job: Job, fn: Callable[..., Any]) -> None:
         job.status, job.started = "running", time.time()
+
+        def report(done: int, total: int, step: str = "") -> None:
+            job.done_n, job.total_n, job.step = done, total, step
+
         try:
-            job.result = fn()
+            # A task opts into progress simply by accepting a `progress` argument;
+            # every existing zero-argument task keeps working untouched.
+            wants_progress = False
+            try:
+                wants_progress = "progress" in inspect.signature(fn).parameters
+            except (TypeError, ValueError):
+                pass
+            job.result = fn(progress=report) if wants_progress else fn()
+            if job.total_n:
+                job.done_n = job.total_n
             job.status = "done"
         except Exception as e:  # noqa: BLE001 — captured into the job, not swallowed
             job.status, job.error = "error", str(e)

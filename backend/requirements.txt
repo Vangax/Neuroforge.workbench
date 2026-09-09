@@ -5,7 +5,8 @@ python-multipart>=0.0.9
 pydantic>=2.9
 
 # scientific / neuro core
-numpy>=1.26
+# upper bound tracks SciPy's supported NumPy range (SciPy 1.15 requires <2.5)
+numpy>=1.26,<2.5
 scipy>=1.13
 pandas>=2.2
 mne>=1.7
@@ -15,6 +16,7 @@ scikit-learn>=1.4      # M8 decoding (CSP + LDA/SVM/RF)
 pyriemann>=0.6         # M8 Riemannian decoding
 matplotlib>=3.8        # M10 report figures
 h5py>=3.10             # M10 HDF5 export
+pyxdf>=1.16            # Lab Streaming Layer .xdf recordings
 
 # --- optional (enable as modules deepen) -----------------------------------
 # mne-bids>=0.15        # BIDS read/write + validation

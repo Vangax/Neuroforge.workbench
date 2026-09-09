@@ -3,6 +3,18 @@ import { Panel, Chip } from "../../components/hud";
 interface Info { name: string; tagline: string; features: string[]; status: "live" | "roadmap" }
 
 export const MODULE_INFO: Record<string, Info> = {
+  auto: {
+    name: "Auto-Analysis Engine", status: "live",
+    tagline: "One button: what is this recording, is it usable, what next.",
+    features: ["Paradigm detection with reasons", "Data-health score and checks",
+      "Notable findings with evidence plots", "Concrete suggested next steps"],
+  },
+  cohort: {
+    name: "Cohort / Batch", status: "live",
+    tagline: "A study treated as a study — analyse and clean every recording at once.",
+    features: ["Auto-analysis across the whole cohort", "One sortable, exportable table",
+      "Robust outlier detection (median/MAD)", "Per-recording recommended cleanup in one pass"],
+  },
   repository: {
     name: "Universal Loader / BIDS Repository", status: "live",
     tagline: "Ingest anything, normalize to NeuroData, index BIDS-native.",

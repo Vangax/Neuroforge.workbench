@@ -39,6 +39,13 @@ export interface TopomapData {
   vmin: number; vmax: number; band: number[]; positions: TopoPos[];
 }
 export interface Health { app: string; version: string; mne: string; numpy: string; n_datasets: number }
+export interface DoctorCheck {
+  id: string; label: string; status: "ok" | "warn" | "fail"; detail: string; fix: string | null;
+}
+export interface DoctorReport {
+  status: "ok" | "warn" | "fail"; n_fail: number; n_warn: number;
+  summary: string; checks: DoctorCheck[];
+}
 
 // --- auth (token stored client-side; only needed when the server enables auth) ---
 const TOKEN_KEY = "nf_token";
@@ -102,6 +109,10 @@ export const api = {
       backendUp = false;
       return null;
     }
+  },
+
+  async doctor(): Promise<DoctorReport | null> {
+    try { return await getJSON<DoctorReport>("/api/doctor"); } catch { return null; }
   },
 
   listDatasets: () =>

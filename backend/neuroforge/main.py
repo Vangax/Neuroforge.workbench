@@ -5,6 +5,7 @@ import time
 import uuid
 import logging
 import platform
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 import numpy as np
@@ -12,9 +13,10 @@ import mne
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .core import loaders
+from .core import loaders, doctor
 from .core.registry import registry
 from .core.store import Store
 from .core.jobs import jobs
@@ -22,6 +24,7 @@ from .core.security import auth, require
 from .api import (
     datasets, signal, spectral, preprocess, erp, analyze,
     mapper, benchmark, bci, edit, report, jobs as jobs_api, scripts as scripts_api,
+    auto as auto_api, samples as samples_api, batch as batch_api, bids as bids_api,
 )
 from .models.schemas import HealthResponse
 
@@ -34,15 +37,16 @@ log = logging.getLogger("neuroforge")
 
 
 def _seed() -> None:
-    # 2 subjects, a few sessions/tasks. Only runs on a fresh (empty) store.
+    # Three deliberately different recordings so the app has something to show
+    # (and Auto-Analysis has something to distinguish). Only runs on a fresh store.
     for s in (
-        dict(subject="01", session="01", task="rest", seed=11),
-        dict(subject="01", session="02", task="oddball", seed=12),
-        dict(subject="02", session="01", task="rest", seed=21),
+        dict(subject="01", session="01", task="restEC", paradigm="resting_closed", seed=11),
+        dict(subject="01", session="02", task="oddball", paradigm="oddball", seed=12),
+        dict(subject="02", session="01", task="noisy", paradigm="artifact_heavy", seed=21),
     ):
         registry.add(loaders.make_synthetic(
             subject=s["subject"], session=s["session"], task=s["task"],
-            seed=s["seed"], n_seconds=60.0, sfreq=256.0,
+            seed=s["seed"], paradigm=s["paradigm"], n_seconds=60.0, sfreq=256.0,
         ))
 
 
@@ -52,8 +56,19 @@ async def lifespan(app: FastAPI):
     registry.attach(Store(settings.db_path, settings.data_dir))
     if settings.seed_synthetic and not registry.all():
         _seed()
-    log.info("ready | datasets=%d | auth=%s | data=%s",
-             len(registry.all()), "on" if auth.enabled else "off", settings.data_dir)
+    # Say what is wrong at startup, in the terminal, before the user hits it in the
+    # middle of an analysis. Advisories are listed once; failures are shouted about.
+    diag = doctor.run(settings)
+    for c in diag["checks"]:
+        if c["status"] == "fail":
+            log.error("SETUP | %s: %s%s", c["label"], c["detail"],
+                      f"  FIX: {c['fix']}" if c["fix"] else "")
+        elif c["status"] == "warn":
+            log.warning("setup | %s: %s%s", c["label"], c["detail"],
+                        f"  fix: {c['fix']}" if c["fix"] else "")
+    log.info("ready | datasets=%d | auth=%s | data=%s | setup=%s",
+             len(registry.all()), "on" if auth.enabled else "off", settings.data_dir,
+             diag["summary"])
     yield
 
 
@@ -107,7 +122,11 @@ app.include_router(analyze.router, dependencies=_read)
 app.include_router(mapper.router, dependencies=_read)
 app.include_router(report.router, dependencies=_read)
 app.include_router(jobs_api.router, dependencies=_read)
+app.include_router(auto_api.router, dependencies=_read)      # Auto-Analysis Engine
+app.include_router(samples_api.router, dependencies=_read)   # one-click sample data
 app.include_router(preprocess.router, dependencies=_write)
+app.include_router(batch_api.router, dependencies=_write)     # cohort analyse/clean
+app.include_router(bids_api.router, dependencies=_write)      # folder import, BIDS export
 app.include_router(benchmark.router, dependencies=_write)
 app.include_router(bci.router, dependencies=_write)
 app.include_router(edit.router, dependencies=_write)
@@ -130,11 +149,39 @@ def system():
         "mne": mne.__version__, "numpy": np.__version__,
         "datasets": len(registry.all()), "data_dir": settings.data_dir,
         "auth_enabled": auth.enabled, "scripts_enabled": settings.scripts_enabled,
+        "storage": registry.storage_backend,
         "jobs": jobs.stats(),
     }
 
 
-@app.get("/", tags=["meta"])
-def root():
+@app.get("/api/doctor", tags=["meta"])
+def doctor_check():
+    """Self-diagnosis — what is wrong with this install and how to fix it."""
+    return doctor.run(settings)
+
+
+@app.get("/api", tags=["meta"])
+def api_info():
     return {"app": settings.app_name, "version": settings.version,
             "docs": "/docs", "health": "/api/health"}
+
+
+# Serve the built UI from the same process/port when it exists, so the whole app
+# is one command and one URL. Mounted last so /api/* keeps priority.
+#
+# Two places to look: `neuroforge/web/` is where the release build lands inside an
+# installed wheel; `frontend/dist` is where it sits in a source checkout. Checking
+# both means `pip install neuroforge` and `git clone` behave identically.
+_HERE = Path(__file__).resolve().parent
+_UI_CANDIDATES = [_HERE / "web", _HERE.parents[1] / "frontend" / "dist"]
+_UI_DIR = next((p for p in _UI_CANDIDATES if (p / "index.html").is_file()), _UI_CANDIDATES[0])
+if _UI_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")
+    log.info("serving UI from %s", _UI_DIR)
+else:
+    @app.get("/", tags=["meta"])
+    def root():
+        return {"app": settings.app_name, "version": settings.version,
+                "docs": "/docs", "health": "/api/health",
+                "ui": "not built — run `npm install && npm run build` in frontend/, "
+                      "or `npm run dev` for the dev server on :5173"}

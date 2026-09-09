@@ -31,8 +31,22 @@ node_modules/
 dist/
 *.local
 
+# packaging (the bundled UI is copied in at build time, never committed)
+backend/neuroforge/web/
+build/
+*.egg-info/
+
+# what the installers create in place
+.venv/
+NeuroForge.cmd
+/neuroforge
+
+# raw recordings, part 2
+*.xdf
+
 # os/editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+.claude/

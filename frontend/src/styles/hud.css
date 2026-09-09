@@ -7,6 +7,8 @@
   display: grid; grid-template-rows: var(--topbar-h) 1fr var(--statusbar-h);
 }
 .app-body { display: grid; grid-template-columns: var(--rail-w) 1fr; min-height: 0; }
+/* guided mode drops the rail — one column, nothing to navigate */
+.app-body.no-rail { grid-template-columns: 1fr; }
 
 /* --- top bar (beveled metal chassis) ------------------------------------ */
 .topbar {
@@ -49,6 +51,22 @@
 .dot.off { background: var(--crimson); box-shadow: var(--glow-crim); animation: blink 1.4s infinite; }
 .dot.rec { background: var(--crimson); box-shadow: var(--glow-crim); animation: blink 1s infinite; }
 .clock { font-family: var(--font-mono); color: var(--gold-hi); text-shadow: var(--glow-gold); font-size: 13px; letter-spacing: 0.1em; }
+
+/* --- guided / pro switch ------------------------------------------------ */
+.mode-toggle { border: 1px solid var(--bevel-lo); background: rgba(0, 0, 0, 0.35); }
+.mode-btn {
+  font: inherit; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  padding: 5px 13px; background: none; border: none; cursor: pointer; color: var(--txt-dim);
+}
+.mode-btn:hover { color: var(--gold-hi); }
+.mode-btn.on {
+  color: var(--crimson-hi); background: rgba(255, 47, 94, 0.14);
+  box-shadow: inset 0 -2px 0 var(--crimson);
+}
+
+/* --- guided sample gallery ---------------------------------------------- */
+.sample-card { transition: border-color 0.12s, background 0.12s; }
+.sample-card:hover { border-color: var(--gold) !important; background: rgba(255, 178, 46, 0.07) !important; }
 
 /* --- left rail ---------------------------------------------------------- */
 .rail {
@@ -161,6 +179,18 @@ table.nf th {
 }
 table.nf td { padding: 3px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); color: var(--txt); }
 table.nf tr:hover td { background: rgba(255, 47, 94, 0.07); color: var(--txt-bright); }
+
+/* cohort table: sortable headers, whole-row click-through to the recording */
+table.cohort { width: 100%; border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+table.cohort th {
+  text-align: left; color: var(--gold); text-transform: uppercase; font-size: 9px; letter-spacing: 0.1em;
+  padding: 6px 9px; border-bottom: 1px solid rgba(255, 178, 46, 0.3);
+  position: sticky; top: 0; background: var(--panel-solid); cursor: pointer; user-select: none;
+}
+table.cohort th:hover { color: var(--gold-hi); }
+table.cohort td { padding: 4px 9px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); color: var(--txt); }
+table.cohort tbody tr { cursor: pointer; }
+table.cohort tbody tr:hover td { background: rgba(255, 47, 94, 0.09); color: var(--txt-bright); }
 
 /* --- status bar (metal) ------------------------------------------------- */
 .statusbar {

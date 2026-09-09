@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Panel, KV, Chip, Spinner } from "../../components/hud";
 import HeroBurst from "../../components/HeroBurst";
+import FolderImport from "../../components/FolderImport";
 import {
   api, type DatasetMeta, type TreeData, type FormatInfo, type ChannelsData,
 } from "../../api/client";
@@ -81,6 +82,8 @@ export default function Repository({ datasets, selectedId, onSelect, onChanged, 
         <input ref={fileRef} type="file" multiple hidden
           onChange={(e) => handleFiles(e.target.files)} />
         {msg && <div className="tiny" style={{ color: "var(--amber-hi)", padding: "0 2px" }}>» {msg}</div>}
+
+        <FolderImport onImported={onChanged} />
 
         <Panel tag="M01" title="BIDS Repository" meta={`${datasets.length} runs`} style={{ maxHeight: 460 }}>
           <Tree tree={tree} selectedId={selectedId} onSelect={onSelect} />

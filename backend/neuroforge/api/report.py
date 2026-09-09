@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
 
-from ..core import report
+from ..core import report, repro
 from ..core.registry import registry
 
 router = APIRouter(prefix="/api/report", tags=["report"])
@@ -31,6 +31,18 @@ def formats():
 @router.get("/{dataset_id}/html", response_class=HTMLResponse)
 def html(dataset_id: str):
     return HTMLResponse(report.build_report(_get(dataset_id)))
+
+
+@router.get("/{dataset_id}/script")
+def script(dataset_id: str, download: bool = Query(False)):
+    """The dataset's provenance rendered as a runnable MNE script."""
+    nd = _get(dataset_id)
+    name = f"reproduce_{nd.entities.label().replace('/', '_')}.py"
+    code = repro.build_script(nd, filename=name)
+    if not download:
+        return {"filename": name, "code": code}
+    return Response(content=code.encode("utf-8"), media_type="text/x-python",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @router.get("/{dataset_id}/environment")

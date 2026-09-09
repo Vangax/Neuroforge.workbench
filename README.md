@@ -16,10 +16,32 @@ mock). See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the depth-hardening plan per
 
 ---
 
+## Two ways in
+
+**Guided mode** is what you get on first run — five steps, one screen at a time, answers
+instead of controls:
+
+```
+01 Load  ▸  02 Analyze  ▸  03 Clean  ▸  04 Interpret  ▸  05 Export
+```
+
+Drop a file (or pick from the built-in gallery of real-looking recordings), and NeuroForge
+tells you what the data is, whether it is usable, what is notable in it — every claim
+linked to the plot that proves it — and what to do next. Step 03 turns the health report
+into an ordered cleanup pipeline where **each step names the measurement that justifies
+it**, lists what it is *deliberately not doing*, and re-scores the recording afterwards so
+you can see the fix worked rather than take it on faith.
+
+**Pro mode** is the full 12-module HUD, one click (or `Ctrl`+`K`) away. Nothing is hidden
+from it; guided mode calls the same endpoints.
+
+---
+
 ## What works today
 
 | # | Module | Status | Notes |
 |---|--------|--------|-------|
+| 00 | **Auto-Analysis Engine** | ✅ live | One button: detects the paradigm (with reasons), scores data health, reports notable findings each backed by its plot, and suggests concrete next steps. Recovers events from stim channels when annotations are empty |
 | 01 | Universal Loader / BIDS Repository | ✅ live | EDF/BDF/GDF/BrainVision/EEGLAB/FIFF/EGI via MNE; synthetic generator; BIDS subject/session tree; channel & event sidecars; in-memory index |
 | 02 | Interactive Visualization | ✅ live | Multichannel viewer, Welch/multitaper PSD, 2D inferno topomap (real interpolation), 3D WebGL head, band-power matrix, real-time scroll |
 | 03 | Preprocessing Pipeline | ✅ live | Visual pipeline builder (re-ref · filter · notch · resample · bad-channel detect · interpolate · ICA+EOG), before/after PSD QC, derivatives |
@@ -29,8 +51,9 @@ mock). See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the depth-hardening plan per
 | 07 | Benchmarking Suite | ✅ live | Pipeline shootout on α-SNR + runtime, channel-correlation QC, environment capture + repro hash |
 | 08 | BCI Workbench | ✅ live | **CSP / Riemannian** + LDA/SVM/RF, 5-fold CV, accuracy/κ/AUC/ITR, confusion, CSP topographies, sim real-time control |
 | 09 | Data Editor / Annotation | ✅ live | Drop/rename channels, bipolar virtual channels, crop, annotations — non-destructive derivatives + provenance/version history |
-| 10 | Reporting / Export | ✅ live | matplotlib HTML report (embedded PSD + topo), export FIF/CSV/NumPy/HDF5/EDF, reproducibility/env panel |
+| 10 | Reporting / Export | ✅ live | matplotlib HTML report (embedded PSD + topo), export FIF/CSV/NumPy/HDF5/EDF, reproducibility/env panel, **provenance → runnable MNE script** that replays the pipeline and verifies itself against the data hash |
 | 11 | Code Lab / Scripting | ✅ live | Run custom Python in an **isolated subprocess** (timeout, captured stdout + figures), save/reuse scripts; **run across many datasets (each / group)**, `nf.*` engine helpers, user/system error split; auth-gated |
+| 12 | Cohort / Batch | ✅ live | Analyse or clean **every** recording in one pass; one sortable, CSV-exportable table with health and every artifact metric; robust (median/MAD) outlier detection that names *why* a run doesn't fit |
 
 Every value on screen is a **real computation** — the seeded datasets are physiologically
 plausible synthetic EEG (posterior alpha, frontal eye-blinks, mains noise, oddball events)
@@ -78,20 +101,72 @@ the BCI decoder reaches **95% accuracy / κ 0.90 / AUC 0.98** on the alpha-state
 ![Code Lab](screenshots/11-codelab.png)
 *Module 11 — Code Lab: run custom Python (`np/scipy/mne/nf`) across one or many datasets in an isolated subprocess.*
 
-## Quickstart
+## Install
 
-Prerequisites: **Python 3.11+** (with `mne`, `fastapi`, `uvicorn`, `scipy`, `numpy`)
-and **Node 18+**.
+**One command, no Node required.** The wheel carries the built interface, so this
+gives you the whole application:
+
+```bash
+pip install neuroforge
+```
+
+Then start it — the server comes up and your browser opens on it:
+
+```bash
+neuroforge
+```
+
+From a clone, the installer scripts create an isolated environment so nothing
+touches your existing Python:
+
+```bash
+bash install.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+Optional extras: `pip install "neuroforge[xdf]"` for Lab Streaming Layer files,
+`[bci]` for Riemannian decoding, `[all]` for both.
+
+### The `neuroforge` command
+
+| Command | What it does |
+|---|---|
+| `neuroforge` | Start the app and open it in the browser (port 8420, or the next free one) |
+| `neuroforge serve --port 9000 --no-browser` | Headless, on a chosen port |
+| `neuroforge serve --data ~/studies` | Put recordings and the index somewhere specific |
+| `neuroforge analyze recording.edf` | Full auto-analysis printed to the terminal — no browser, no server |
+| `neuroforge analyze recording.edf --json` | The same report as JSON, for scripts and CI |
+| `neuroforge doctor` | Check the install and print the command that fixes anything wrong |
+| `neuroforge version` | NeuroForge, MNE, NumPy and Python versions |
+
+Recordings live in `~/.neuroforge/data` by default (inside the repo when you run
+from a checkout); override with `--data` or `NEUROFORGE_DATA`.
+
+---
+
+## Developing
+
+Prerequisites: **Python 3.10+** and **Node 18+**.
 
 ### 1 · Backend (FastAPI + MNE)
 
+**One command, one URL.** Build the UI once, then run the server; it serves the
+interface and the API together:
+
 ```bash
-cd backend
+cd frontend
+npm install
+npm run build
+cd ../backend
 pip install -r requirements.txt
 python run.py
 ```
 
-Backend runs at `http://127.0.0.1:8000` (API docs at `/docs`).
+Open **http://127.0.0.1:8000** — Guided mode opens on the seeded data.
+(API docs at `/docs`.) Use the two-server dev setup below only when editing the frontend.
 
 ### 2 · Frontend (Vite + React)
 
@@ -113,6 +188,15 @@ keeps working.
 ```bash
 cd backend
 python -m pytest tests/ -q        # cores, persistence round-trip, API
+```
+
+### 4 · Building a release
+
+Copies the Vite bundle into the package and builds a wheel + sdist that need
+neither Node nor this repository:
+
+```bash
+python scripts/build_release.py
 ```
 
 ### Use it from your own notebook
@@ -181,14 +265,24 @@ montage, BIDS entities, events and a **provenance log**. See
 ### Key API endpoints (full OpenAPI at `/docs`)
 
 ```
-GET  /api/health
+GET  /api/health              · /api/system · /api/doctor   (install self-check)
 GET  /api/datasets            · /tree · /formats · /{id} · /{id}/channels · /{id}/events
 POST /api/datasets/synthetic  · /upload
+POST /api/auto/{id}/analyze                       → job → full auto-analysis report
+GET  /api/samples             · POST /api/samples/{id}/load
 GET  /api/signal/{id}/window?start&duration&picks&max_points
 GET  /api/spectral/{id}/psd        ?fmin&fmax&method
 GET  /api/spectral/{id}/bandpower  ?relative
 GET  /api/spectral/{id}/topomap    ?fmin&fmax&resolution
+POST /api/preprocess/{id}/run                     → job → derivative + QC
+POST /api/batch/analyze       · /clean · /csv     → cohort table, outliers, batch cleanup
+POST /api/bids/scan           · /import · /export → folder ingest, BIDS derivatives tree
+GET  /api/report/{id}/html    · /export?fmt · /environment
+GET  /api/report/{id}/script  ?download           → standalone, self-verifying MNE script
 ```
+
+Long-running jobs report progress: `GET /api/jobs/{id}` returns `done_n`, `total_n`,
+the current `step` and an `eta` computed from the rate actually achieved.
 
 ---
 

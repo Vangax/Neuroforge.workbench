@@ -21,13 +21,28 @@ CH_TYPE_COLORS: dict[str, str] = {
     "eog": "#ffe14d", "ecg": "#7afcff", "emg": "#9dff5c", "stim": "#8a93a6", "misc": "#5a6172",
 }
 
-_DEFAULT_DATA = str(Path(__file__).resolve().parent.parent / "data")
+def _default_data_dir() -> str:
+    """Where recordings live when NEUROFORGE_DATA is not set.
+
+    In a source checkout that stays inside the repo (gitignored) so a clone behaves
+    the way it always has. Installed as a package it must not be site-packages —
+    that is read-only on managed installs and gets wiped on upgrade — so it goes to
+    the user's home instead.
+    """
+    pkg = Path(__file__).resolve().parent          # .../neuroforge
+    checkout = pkg.parent                          # .../backend  (in a repo)
+    if (checkout.parent / "frontend").is_dir() and (checkout.parent / ".git").exists():
+        return str(checkout / "data")
+    return str(Path.home() / ".neuroforge" / "data")
+
+
+_DEFAULT_DATA = _default_data_dir()
 
 
 @dataclass
 class Settings:
     app_name: str = "NeuroForge"
-    version: str = "0.1.0"
+    version: str = "0.2.0"
 
     cors_origins: list[str] = field(default_factory=lambda: [
         "http://localhost:5173", "http://127.0.0.1:5173",

@@ -21,7 +21,12 @@ class Registry:
         self._store = store
         for nd in store.load_all():
             self._items[nd.id] = nd
-        log.info("registry: rehydrated %d dataset(s)", len(self._items))
+        log.info("registry: rehydrated %d dataset(s) | storage=%s",
+                 len(self._items), getattr(store, "backend", "?"))
+
+    @property
+    def storage_backend(self) -> str:
+        return getattr(self._store, "backend", "none")
 
     def add(self, nd: NeuroData) -> NeuroData:
         with self._lock:

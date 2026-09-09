@@ -7,54 +7,40 @@ import sys
 import json
 import time
 import uuid
-import sqlite3
 import tempfile
 import subprocess
 from pathlib import Path
 
 from .neurodata import NeuroData
+from . import kvstore
 from ..config import settings
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]  # dir containing the `neuroforge` package
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS scripts (
-    id TEXT PRIMARY KEY, name TEXT, description TEXT, code TEXT,
-    author TEXT, created_at REAL
-);
-"""
-
 
 class ScriptStore:
     def __init__(self, db_path: str):
-        self._db = sqlite3.connect(db_path, check_same_thread=False)
-        self._db.row_factory = sqlite3.Row
-        self._db.execute(_SCHEMA)
-        self._db.commit()
+        self._table = kvstore.open_table(db_path, "scripts")
 
     def save(self, name: str, description: str, code: str, author: str = "local",
              script_id: str | None = None) -> dict:
         sid = script_id or uuid.uuid4().hex[:12]
-        existing = self._db.execute("SELECT created_at FROM scripts WHERE id=?", (sid,)).fetchone()
+        existing = self._table.get(sid)
         created = existing["created_at"] if existing else time.time()
-        self._db.execute(
-            "INSERT OR REPLACE INTO scripts VALUES (?,?,?,?,?,?)",
-            (sid, name, description, code, author, created),
-        )
-        self._db.commit()
+        self._table.put(sid, {"id": sid, "name": name, "description": description,
+                              "code": code, "author": author, "created_at": created})
         return self.get(sid)
 
     def get(self, script_id: str) -> dict | None:
-        r = self._db.execute("SELECT * FROM scripts WHERE id=?", (script_id,)).fetchone()
-        return dict(r) if r else None
+        return self._table.get(script_id)
 
     def list(self) -> list[dict]:
-        return [{k: row[k] for k in ("id", "name", "description", "author", "created_at")}
-                for row in self._db.execute("SELECT * FROM scripts ORDER BY created_at DESC")]
+        rows = sorted(self._table.all(), key=lambda r: r.get("created_at") or 0.0, reverse=True)
+        return [{k: r.get(k) for k in ("id", "name", "description", "author", "created_at")}
+                for r in rows]
 
     def delete(self, script_id: str) -> None:
-        self._db.execute("DELETE FROM scripts WHERE id=?", (script_id,))
-        self._db.commit()
+        self._table.delete(script_id)
 
 
 def _spawn(job: dict) -> dict:
