@@ -169,11 +169,13 @@ def api_info():
 # Serve the built UI from the same process/port when it exists, so the whole app
 # is one command and one URL. Mounted last so /api/* keeps priority.
 #
-# Two places to look: `neuroforge/web/` is where the release build lands inside an
-# installed wheel; `frontend/dist` is where it sits in a source checkout. Checking
-# both means `pip install neuroforge` and `git clone` behave identically.
+# Two places to look, and the order matters. `frontend/dist` is what `npm run build`
+# updates, so in a source checkout it is always the fresher of the two and must win —
+# otherwise a stale release bundle left in `neuroforge/web/` by a previous
+# `build_release.py` would silently shadow the UI you are working on. In an installed
+# wheel only `neuroforge/web/` exists, so the same rule serves both cases.
 _HERE = Path(__file__).resolve().parent
-_UI_CANDIDATES = [_HERE / "web", _HERE.parents[1] / "frontend" / "dist"]
+_UI_CANDIDATES = [_HERE.parents[1] / "frontend" / "dist", _HERE / "web"]
 _UI_DIR = next((p for p in _UI_CANDIDATES if (p / "index.html").is_file()), _UI_CANDIDATES[0])
 if _UI_DIR.is_dir():
     app.mount("/", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")

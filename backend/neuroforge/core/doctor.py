@@ -105,7 +105,7 @@ def _data_dir(path: str) -> dict:
 
 def _ui() -> dict:
     here = Path(__file__).resolve().parent.parent          # .../neuroforge
-    for d in (here / "web", here.parents[1] / "frontend" / "dist"):
+    for d in (here.parents[1] / "frontend" / "dist", here / "web"):   # same order as main.py
         if (d / "index.html").is_file():
             return _check("ui", "Bundled interface", "ok",
                           f"Built UI is being served from {d}.")
