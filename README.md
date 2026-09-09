@@ -2,17 +2,16 @@
 
 > BIDS-native · Extensible · Reproducible · Real-time capable
 > A desktop-class neuro-engineering console for EEG/MEG/iEEG/fNIRS.
-> **v0.1.0** · MIT licensed · FastAPI + MNE-Python backend · React/WebGL HUD · Python client
+> **v0.2.0** · MIT licensed · `pip install neuroforge` · FastAPI + MNE-Python backend · React/WebGL HUD · Python client
 
 NeuroForge is a production-oriented platform for neuroengineers, BCI researchers and
 cognitive scientists. The numerical core is **MNE-Python + SciPy + NumPy** behind a
 **FastAPI** service; the interface is a **React + TypeScript + WebGL** "desktop
 imperium" HUD.
 
-This repository implements **all 10 spec modules at MVP depth — plus a Code Lab for
-custom user scripts** — each wired end-to-end, GUI **and** API, computing on real
-MNE-Python / SciPy / scikit-learn (every value on screen is a real computation, not a
-mock). See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the depth-hardening plan per module.
+This repository implements **all 12 modules end-to-end**, GUI **and** API, computing on
+real MNE-Python / SciPy / scikit-learn — every value on screen is a real computation,
+not a mock. `CHANGELOG.md` tracks what landed in each release.
 
 ---
 
@@ -41,28 +40,28 @@ from it; guided mode calls the same endpoints.
 
 | # | Module | Status | Notes |
 |---|--------|--------|-------|
-| 00 | **Auto-Analysis Engine** | ✅ live | One button: detects the paradigm (with reasons), scores data health, reports notable findings each backed by its plot, and suggests concrete next steps. Recovers events from stim channels when annotations are empty |
-| 01 | Universal Loader / BIDS Repository | ✅ live | EDF/BDF/GDF/BrainVision/EEGLAB/FIFF/EGI via MNE; synthetic generator; BIDS subject/session tree; channel & event sidecars; in-memory index |
-| 02 | Interactive Visualization | ✅ live | Multichannel viewer, Welch/multitaper PSD, 2D inferno topomap (real interpolation), 3D WebGL head, band-power matrix, real-time scroll |
-| 03 | Preprocessing Pipeline | ✅ live | Visual pipeline builder (re-ref · filter · notch · resample · bad-channel detect · interpolate · ICA+EOG), before/after PSD QC, derivatives |
-| 04 | ERP / ERF Analyzer | ✅ live | Event epoching, condition averages, GFP, peak picking, difference wave, **cluster-based permutation test**, difference topography |
-| 05 | Signal Analyzer / Features | ✅ live | Hjorth, perm-entropy, Higuchi FD, DFA, spectral edge/median/peak; PLV/PLI/wPLI/coherence + connectogram + graph metrics; **aperiodic/periodic 1/f (specparam-style)**; **EEG microstates** (modified k-means — maps, coverage, duration, transitions) |
-| 06 | Cross-Session Mapper | ✅ live | Cohort dashboard, datasets×channels band-power map, session-similarity matrix + reliability |
-| 07 | Benchmarking Suite | ✅ live | Pipeline shootout on α-SNR + runtime, channel-correlation QC, environment capture + repro hash |
-| 08 | BCI Workbench | ✅ live | **CSP / Riemannian** + LDA/SVM/RF, 5-fold CV, accuracy/κ/AUC/ITR, confusion, CSP topographies, sim real-time control |
-| 09 | Data Editor / Annotation | ✅ live | Drop/rename channels, bipolar virtual channels, crop, annotations — non-destructive derivatives + provenance/version history |
-| 10 | Reporting / Export | ✅ live | matplotlib HTML report (embedded PSD + topo), export FIF/CSV/NumPy/HDF5/EDF, reproducibility/env panel, **provenance → runnable MNE script** that replays the pipeline and verifies itself against the data hash |
-| 11 | Code Lab / Scripting | ✅ live | Run custom Python in an **isolated subprocess** (timeout, captured stdout + figures), save/reuse scripts; **run across many datasets (each / group)**, `nf.*` engine helpers, user/system error split; auth-gated |
-| 12 | Cohort / Batch | ✅ live | Analyse or clean **every** recording in one pass; one sortable, CSV-exportable table with health and every artifact metric; robust (median/MAD) outlier detection that names *why* a run doesn't fit |
+| 00 | **Auto-Analysis Engine** | live | One button: detects the paradigm (with reasons), scores data health, reports notable findings each backed by its plot, and suggests concrete next steps. Recovers events from stim channels when annotations are empty |
+| 01 | Universal Loader / BIDS Repository | live | EDF/BDF/GDF/BrainVision/EEGLAB/FIFF/EGI/XDF via MNE; **folder & BIDS-study import by path**; synthetic generator; BIDS subject/session tree; channel & event sidecars |
+| 02 | Interactive Visualization | live | Multichannel viewer, Welch/multitaper PSD, 2D inferno topomap (real interpolation), 3D WebGL head, band-power matrix, real-time scroll |
+| 03 | Preprocessing Pipeline | live | Visual pipeline builder (re-ref · filter · notch · resample · bad-channel detect · interpolate · ICA+EOG), before/after PSD QC, derivatives |
+| 04 | ERP / ERF Analyzer | live | Event epoching, condition averages, GFP, peak picking, difference wave, **cluster-based permutation test**, difference topography |
+| 05 | Signal Analyzer / Features | live | Hjorth, perm-entropy, Higuchi FD, DFA, spectral edge/median/peak; PLV/PLI/wPLI/coherence + connectogram + graph metrics; **aperiodic/periodic 1/f (specparam-style)**; **EEG microstates** (modified k-means — maps, coverage, duration, transitions) |
+| 06 | Cross-Session Mapper | live | Cohort dashboard, datasets×channels band-power map, session-similarity matrix + reliability |
+| 07 | Benchmarking Suite | live | Pipeline shootout on α-SNR + runtime, channel-correlation QC, environment capture + repro hash |
+| 08 | BCI Workbench | live | **CSP / Riemannian** + LDA/SVM/RF, 5-fold CV, accuracy/κ/AUC/ITR, confusion, CSP topographies, sim real-time control |
+| 09 | Data Editor / Annotation | live | Drop/rename channels, bipolar virtual channels, crop, annotations — non-destructive derivatives + provenance/version history |
+| 10 | Reporting / Export | live | matplotlib HTML report (embedded PSD + topo), export FIF/CSV/NumPy/HDF5/EDF, **BIDS derivatives tree**, reproducibility/env panel, **provenance → runnable MNE script** that replays the pipeline and verifies itself against the data hash |
+| 11 | Code Lab / Scripting | live | Run custom Python in an **isolated subprocess** (timeout, captured stdout + figures), save/reuse scripts; **run across many datasets (each / group)**, `nf.*` engine helpers, user/system error split; auth-gated |
+| 12 | Cohort / Batch | live | Analyse or clean **every** recording in one pass; one sortable, CSV-exportable table with health and every artifact metric; robust (median/MAD) outlier detection that names *why* a run doesn't fit |
 
 Every value on screen is a **real computation** — the seeded datasets are physiologically
 plausible synthetic EEG (posterior alpha, frontal eye-blinks, mains noise, oddball events)
 generated by MNE, so the platform is usable with zero data on disk. Verified live:
 the BCI decoder reaches **95% accuracy / κ 0.90 / AUC 0.98** on the alpha-state task.
 
-> **MVP depth** means each module implements its headline capabilities end-to-end, not
-> every sub-bullet of the spec. `docs/ROADMAP.md` lists the remaining depth per module
-> (e.g. Autoreject/PREP for M3, Granger/DTF for M5, EEGNet + LSL real-time for M8).
+> Each module implements its headline capabilities end-to-end, not every sub-bullet of
+> the spec. Still open: Autoreject/PREP for M3, Granger/DTF for M5, and EEGNet + LSL
+> real-time for M8.
 
 ---
 
@@ -259,8 +258,8 @@ Reads need `viewer`; preprocessing / decoding / edits need `analyst`.
 
 The **`NeuroData`** object model (`backend/neuroforge/core/neurodata.py`) is the central type:
 every format normalizes into it, preserving sampling rate, channel types/locations,
-montage, BIDS entities, events and a **provenance log**. See
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+montage, BIDS entities, events and a **provenance log** — the record that makes the
+reproduction script below possible.
 
 ### Key API endpoints (full OpenAPI at `/docs`)
 
@@ -299,7 +298,7 @@ a **crimson shard-burst** over black and a **golden coil**. Concretely:
 - film grain + scanlines + vignette for depth
 
 All theming lives in `frontend/src/styles/tokens.css` (a single source of truth).
-
+(design made with complete help of set of ai tools
 ---
 
 ## Production readiness
@@ -345,7 +344,6 @@ Honest status — this is a solid, real foundation, not yet a finished product.
 8. **Workflow** — undo/redo, batch processing across subjects, large-file WebGL viewer,
    plugin API, hardened REST docs.
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the per-module depth plan.
 
 ## Repository layout
 
